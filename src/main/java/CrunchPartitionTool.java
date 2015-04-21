@@ -36,8 +36,7 @@ public class CrunchPartitionTool extends Configured implements Tool {
 
     Configuration conf = getConf();
 
-    FileSystem fs = FileSystem.get(conf);
-    Schema schema = readSchema(fs, new Path(inputPath));
+    Schema schema = readSchema(new Path(inputPath));
 
     Pipeline pipeline = new MRPipeline(CrunchPartitionTool.class, conf);
     PCollection<GenericData.Record> records = pipeline.read(
@@ -69,8 +68,9 @@ public class CrunchPartitionTool extends Configured implements Tool {
     System.exit(exitCode);
   }
 
-  private static Schema readSchema(FileSystem fs, Path path) throws IOException {
+  private Schema readSchema(Path path) throws IOException {
     Path file;
+    FileSystem fs = path.getFileSystem(getConf());
     if (fs.isDirectory(path)) {
       FileStatus[] fileStatuses = fs.listStatus(path, new PathFilter() {
         @Override
@@ -86,7 +86,7 @@ public class CrunchPartitionTool extends Configured implements Tool {
     return Schemas.fromParquet(fs, file);
   }
 
-  private static PartitionStrategy readPartitionStrategy(String name) throws IOException {
+  private PartitionStrategy readPartitionStrategy(String name) throws IOException {
     InputStream in = CrunchPartitionTool.class.getResourceAsStream(name + ".json");
     try {
       return PartitionStrategyParser.parse(in);
