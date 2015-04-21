@@ -9,10 +9,13 @@ import org.apache.crunch.impl.mr.MRPipeline;
 import org.apache.crunch.io.parquet.AvroParquetFileSource;
 import org.apache.crunch.types.avro.Avros;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.util.Tool;
+import org.apache.hadoop.util.ToolRunner;
 import org.kitesdk.data.CompressionType;
 import org.kitesdk.data.DatasetDescriptor;
 import org.kitesdk.data.Datasets;
@@ -23,16 +26,15 @@ import org.kitesdk.data.crunch.CrunchDatasets;
 import org.kitesdk.data.spi.PartitionStrategyParser;
 import org.kitesdk.data.spi.Schemas;
 
-public class CrunchPartitionTool {
+public class CrunchPartitionTool extends Configured implements Tool {
 
-  public static void main(String[] args) throws Exception {
-
+  @Override
+  public int run(String[] args) throws Exception {
     String partitionStrategyName = args[0];
     String inputPath = args[1];
     String outputPath = args[2];
-    String numReducers = args[3];
 
-    Configuration conf = new Configuration();
+    Configuration conf = getConf();
 
     FileSystem fs = FileSystem.get(conf);
     Schema schema = readSchema(fs, new Path(inputPath));
@@ -51,13 +53,20 @@ public class CrunchPartitionTool {
     View<GenericData.Record> dataset = Datasets.create("dataset:" + outputPath, desc,
         GenericData.Record.class);
 
+    int numReducers = conf.getInt("mapreduce.job.reduces", 1);
+    System.out.println("Num reducers: " + numReducers);
     PCollection<GenericData.Record> partition =
-        CrunchDatasets.partition(records, dataset, Integer.parseInt(numReducers));
+        CrunchDatasets.partition(records, dataset, numReducers);
 
     pipeline.write(partition, CrunchDatasets.asTarget(dataset));
 
     PipelineResult result = pipeline.done();
-    System.exit(result.succeeded() ? 0 : 1);
+    return result.succeeded() ? 0 : 1;
+  }
+
+  public static void main(String[] args) throws Exception {
+    int exitCode = ToolRunner.run(new CrunchPartitionTool(), args);
+    System.exit(exitCode);
   }
 
   private static Schema readSchema(FileSystem fs, Path path) throws IOException {
